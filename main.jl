@@ -13,8 +13,8 @@ include("src/DataGenerator.jl")
 
 ## Preliminary.
 # Discretization
-N = 1000
-nsteps = 30
+N = 70_000
+nsteps = 80
 
 # Creating objects.
 domain = DifferentialOperator.Domain(nsteps = nsteps)
@@ -41,28 +41,61 @@ optimiser = Flux.Optimiser(WeightDecay(λ), Flux.Adam(η))
 loss_func = l₂loss
 
 # Dataloaders.
-data_train, data_test = splitobs((Float32.(x_data), Float32.(y_data)), at = ratio)
-loader_train = DataLoader(data_train, batchsize = 10, shuffle = false)
-loader_test = DataLoader(data_test, batchsize = 10, shuffle = false)
-data = collect.((loader_train, loader_test))
+data_f_train, data_f_test = splitobs((Float32.(x_data), Float32.(y_data)), at = ratio)
+loader_f_train = DataLoader(data_f_train, batchsize = 500, shuffle = false)
+loader_f_test = DataLoader(data_f_test, batchsize = 500, shuffle = false)
+data_f = collect.((loader_f_train, loader_f_test))
+
+# Inverse data loaderrs.
+data_i_train, data_i_test = splitobs((Float32.(y_data), Float32.(x_data)), at = ratio)
+loader_i_train = DataLoader(data_i_train, batchsize = 500, shuffle = false)
+loader_i_test = DataLoader(data_i_test, batchsize = 500, shuffle = false)
+data_i = collect.((loader_i_train, loader_i_test))
 
 # Create and train model.
-model = FourierNeuralOperator(ch = (1, 32, 32, 32, 32, 32, 64, 1), σ = gelu)
-learner = Learner(model, data, optimiser, loss_func)
+model_f = FourierNeuralOperator(ch = (1, 64, 64, 64, 64, 64, 128, 1), σ = gelu)
+learner_f = Learner(model_f, data_f, optimiser, loss_func)
 
-# Train model.
-epochs = 100
-fit!(learner, epochs)
+# Create and train model.
+model_i = FourierNeuralOperator(ch = (1, 64, 64, 64, 64, 64, 128, 1), σ = gelu)
+learner_i = Learner(model_i, data_i, optimiser, loss_func)
+
+epochs = 1
+fit!(learner_f, epochs)
+epochs = 1
+fit!(learner_i, epochs)
+forward_model = learner_f.model |> cpu
+inverse_model = learner_i.model |> cpu
+@save "models/forward.bson" forward_model
+@save "models/inverse.bson" inverse_model
+# exit()
 
 # data[train or test][batch][x or y data][variable, mesh, observation]
-model( data[1][1][1] )
+# f : A -> U
+# i : U -> A
 
-# Plotting.
-j = 1
-a_to_plot = a_input[2, :, j]
-u_to_plot = u_output[1, :, j]
+batch = 2
+a_real = data_f[2][batch][1] 
+u_real = data_f[2][batch][2] 
+
+# Plots for forward operator.
+j = 17
+u_to_plot = u_real[1, :, j]
+plot(domain.x, u_to_plot)
+plot!(domain.x, model_f(a_real)[1, :, j])
+
+# Plots for inverse operator.
+j = 17
+
+a_to_plot = a_real[1, :, j]
+plot(domain.x, a_to_plot)
+plot!(domain.x, model_i(u_real)[1, :, j])
 
 # Save and load.
-model_to_save = learner.model |> cpu
-@save "models/forward.bson" model_to_save
-BSON.load("models/forward.bson")[:model_to_save]
+forward_model = learner_f.model |> cpu
+inverse_model = learner_i.model |> cpu
+@save "models/forward.bson" forward_model
+@save "models/inverse.bson" inverse_model
+
+model_f = BSON.load("models/forward.bson")[:forward_model]
+model_i = BSON.load("models/inverse.bson")[:inverse_model]
