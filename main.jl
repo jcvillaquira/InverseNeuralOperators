@@ -46,22 +46,25 @@ loader_f_train = DataLoader(data_f_train, batchsize = 500, shuffle = false)
 loader_f_test = DataLoader(data_f_test, batchsize = 500, shuffle = false)
 data_f = collect.((loader_f_train, loader_f_test))
 
-# Inverse data loaderrs.
+# Create and train model.
+model_f = FourierNeuralOperator(ch = (1, 64, 64, 64, 64, 64, 128, 1), σ = gelu)
+learner_f = Learner(model_f, data_f, optimiser, loss_func)
+
+# Train forward model.
+epochs = 1
+fit!(learner_f, epochs)
+
+# Inverse data loaders.
 data_i_train, data_i_test = splitobs((Float32.(y_data), Float32.(x_data)), at = ratio)
 loader_i_train = DataLoader(data_i_train, batchsize = 500, shuffle = false)
 loader_i_test = DataLoader(data_i_test, batchsize = 500, shuffle = false)
 data_i = collect.((loader_i_train, loader_i_test))
 
-# Create and train model.
-model_f = FourierNeuralOperator(ch = (1, 64, 64, 64, 64, 64, 128, 1), σ = gelu)
-learner_f = Learner(model_f, data_f, optimiser, loss_func)
-
-# Create and train model.
+# Create inverse model.
 model_i = FourierNeuralOperator(ch = (1, 64, 64, 64, 64, 64, 128, 1), σ = gelu)
 learner_i = Learner(model_i, data_i, optimiser, loss_func)
 
-epochs = 1
-fit!(learner_f, epochs)
+# Train inverse model.
 epochs = 1
 fit!(learner_i, epochs)
 forward_model = learner_f.model |> cpu
