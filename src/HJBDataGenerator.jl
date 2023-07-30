@@ -9,7 +9,7 @@ Base.@kwdef struct Domain
   t0::Float64 = 0.0
   t1::Float64 = 1.0
   tsteps::Int64 = 10
-  dt = (t1 - t0) / (tsteps - 1)
+  dt::Float64 = (t1 - t0) / (tsteps - 1)
   T = range(t0, t1, length = tsteps)
   x0::Float64 = -1.0
   x1::Float64 = 1.0
@@ -67,10 +67,11 @@ end
 module ValueFunction
 
 function apply_value_function(sample::Matrix, domain)
+  # Compute value function using dynamic programming.
   v = Array{Float64}(undef, domain.tsteps, domain.xsteps)
-  v[end, :] = sample[2, :]
   v[1:end-1, 1] = sample[3, 1:domain.tsteps - 1]
   v[1:end-1, end] = sample[3, domain.tsteps:domain.xsteps-1]
+  v[end, :] = sample[2, :]
   ℓ = sample[1, :]
   for nt in reverse(range(1, domain.tsteps - 1))
     for nx in range(2, domain.xsteps - 1)
@@ -84,5 +85,64 @@ end
 export apply_value_function
 
 end
+
+## Module models.
+module Model
+  using MLUtils
+  using Flux
+  using FluxTraining
+  using NeuralOperators
+
+  Base.@kwdef struct Loader
+    # Create dataloader.
+    xdata
+    ydata
+    data_train
+    data_test
+    data
+    function Loader(xdata, ydata, ratio::Float64 = 0.9)
+      data_train, data_test = splitobs((Float32.(xdata), Float32.(ydata)), at = ratio)
+      loader_train, loader_test = DataLoader(data_train), DataLoader(data_test)
+      data = collect.((loader_train, loader_test))
+      return new(xdata, ydata, data_train, data_test, data)
+    end
+  end
+
+  Base.@kwdef struct NOModel
+    # Fourier neural operator and learner.
+    loader
+    inner_channels::Tuple = (16, 16, 16, 16, 16, 32)
+    channels::Tuple = (size(loader.xdata, 1), inner_channels... , size(loader.ydata, 1))
+    modes::Tuple = (8,)
+    λ::Float64 = 1.0f-4
+    η::Float64 = 1.0f-3
+    optimiser = Flux.Optimiser(WeightDecay(λ), Flux.Adam(η))
+    model = FourierNeuralOperator(ch = channels, modes = modes, σ = gelu)
+    learner = Learner(model, loader.data, optimiser, l₂loss)
+  end
+
+  function train_epoch!(nomodel, loader, errors = (true, true, true))
+    # Train model one epoch based on data and return l₂loss.
+    error₁ = error₂ = error₃ = NaN
+    epoch!(nomodel.learner, TrainingPhase(), nomodel.learner.data.training)
+    epoch!(nomodel.learner, ValidationPhase(), nomodel.learner.data.validation)
+    if errors[1]
+      error₁ = l₂loss( nomodel.learner.model( loader.data_train[1] ), loader.data_train[2] )
+    end
+    if errors[2]
+      error₂ = l₂loss( nomodel.learner.model( loader.data_test[1] ), loader.data_test[2] )
+    end
+    if errors[3]
+      error₃ = l₂loss( nomodel.learner.model( loader.xdata ), loader.ydata )
+    end
+    return (error₁, error₂, error₃)[collect(errors)]
+  end
+
+  export DataLoader
+  export NOModel
+  export train_epoch!
+
+end
+
 
 
