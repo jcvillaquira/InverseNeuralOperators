@@ -86,27 +86,27 @@ data = BSON.load("hjb/20230729/data.bson" )
 forward = BSON.load("hjb/20230729/forward.bson" )
 inverse = BSON.load("hjb/20230729/inverse.bson" )
 
+lines(forward[:errors_f][2, :])
+
 # Plots and validations
 y_pred = forward[:model_ff]( data[:xdata] )
 y_real = data[:ydata]
 
 colormap = :blackbody
 
-k = 10
+
+k = 1
 y_pred_ = y_pred[:, :, end-k]
 y_real_ = y_real[:, :, end-k]
-
-function compare_boundary_conditions(y_pred_, y_real_, domain)
-  T = Float32.( domain.T )
-  Ω = Float32.( domain.Ω )
-  fig = Figure()
-  ax = Axis3(fig[1, 1])
-  # lines!(ax, [Point3f(ty[1], 1.0, ty[2]) for ty in zip(T, y_real_[:, end])], color = :blue, linewidth = 3)
-  # lines!(ax, [Point3f(ty[1], -1.0, ty[2]) for ty in zip(T, y_real_[:, 1])], color = :blue, linewidth = 3)
-  # lines!(ax, [Point3f(1.0, xy[1], xy[2]) for xy in zip(Ω, y_real_[end, :])], color = :blue, linewidth = 3)
-  surface!(ax, [t for t in T, x in Ω], [x for t in T, x in Ω], y_pred_) # , colormap = (:blackbody, 0.8))
-  fig
-end
+T = Float32.( domain.T )
+Ω = Float32.( domain.Ω )
+fig = Figure()
+ax = Axis3(fig[1, 1], xlabel = "Tiempo", ylabel = "y(t)")
+lines!(ax, [Point3f(ty[1], 1.0, ty[2]) for ty in zip(T, y_real_[:, end])], color = :blue, linewidth = 3)
+lines!(ax, [Point3f(ty[1], -1.0, ty[2]) for ty in zip(T, y_real_[:, 1])], color = :blue, linewidth = 3)
+lines!(ax, [Point3f(1.0, xy[1], xy[2]) for xy in zip(Ω, y_real_[end, :])], color = :blue, linewidth = 3)
+surface!(ax, [t for t in T, x in Ω], [x for t in T, x in Ω], y_pred_, colormap = (:blackbody, 0.8))
+fig
 
 compare_boundary_conditions(y_pred, y_real_, domain)
 

@@ -135,7 +135,7 @@ module Model
     if errors[3]
       error₃ = l₂loss( nomodel.learner.model( loader.xdata ), loader.ydata )
     end
-    return (error₁, error₂, error₃)[collect(errors)]
+    return [error₁, error₂, error₃][collect(errors)]
   end
 
   export DataLoader
@@ -146,3 +146,63 @@ end
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+################################################################################
+# Abandoned code ###############################################################
+################################################################################
+
+## Operator module.
+module Operator
+# Running cost.
+function running_cost(t, x, fℓ)
+  x₀ = abs(x)
+  return fℓ(-max(t, x₀))
+end
+# Cost associated to reaching the boundary.
+function boundary_cost(t, x, fφ, domain)
+  if abs(x) >= t
+    return 0.0
+  end
+  remaining = 1.0 - t
+  projection = abs.(domain.Ω .- x) .< remaining
+  nodes_projection = vcat([x - remaining, x + remaining], domain.Ω[projection])
+  return min(fφ.(nodes_projection)...)
+end
+# Total cost.
+function cost(domain, fℓ, fφ)
+  total_cost(tx) = boundary_cost(tx..., fφ, domain) + running_cost(tx..., fℓ)
+  return total_cost.(Iterators.product(domain.T, domain.Ω))
+end
+export running_cost
+export boundary_cost
+end
